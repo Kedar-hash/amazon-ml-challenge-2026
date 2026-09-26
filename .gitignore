@@ -1,0 +1,95 @@
+# ==============================================================================
+# Amazon ML Challenge 2026 - .gitignore
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Byte-compiled / optimized / DLL files
+# ------------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# ------------------------------------------------------------------------------
+# Virtual environments
+# ------------------------------------------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# ------------------------------------------------------------------------------
+# Environment variables and secrets
+# ------------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+
+# ------------------------------------------------------------------------------
+# IDEs and Editors
+# ------------------------------------------------------------------------------
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.project
+.settings/
+
+# ------------------------------------------------------------------------------
+# OS-generated files & macOS extraction metadata
+# ------------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+__MACOSX/
+**/__MACOSX/
+
+# ------------------------------------------------------------------------------
+# Large Dataset Directory (~2.5 GB test & train data files)
+# ------------------------------------------------------------------------------
+dataset/
+**/dataset/
+
+# ------------------------------------------------------------------------------
+# Generated Model Binaries
+# ------------------------------------------------------------------------------
+models/*.joblib
+**/models/*.joblib
+models/*.pkl
+**/models/*.pkl
+models/*.bin
+**/models/*.bin
+
+# ------------------------------------------------------------------------------
+# Temporary Prediction Checkpoints & Lock Files
+# (Do NOT use a blanket *.tsv rule; target only generated files)
+# ------------------------------------------------------------------------------
+output/temp_*.tsv
+**/output/temp_*.tsv
+output/*.tmp
+**/output/*.tmp
+output/.predict_lock
+**/output/.predict_lock
+output/checkpoint_backup/
+**/output/checkpoint_backup/
+
+# ------------------------------------------------------------------------------
+# Generated Final Submission TSV Files
+# ------------------------------------------------------------------------------
+output/matching_results.tsv
+**/output/matching_results.tsv
+output/candidate_pairs.tsv
+**/output/candidate_pairs.tsv
+
+# ------------------------------------------------------------------------------
+# Preserve directory structure if .gitkeep is present
+# ------------------------------------------------------------------------------
+!output/.gitkeep
+!models/.gitkeep
