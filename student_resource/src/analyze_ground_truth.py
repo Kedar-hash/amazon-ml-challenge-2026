@@ -31,6 +31,16 @@ if hasattr(sys.stderr, "reconfigure"):
 def resolve_base_dir():
     """Resolve base directory whether run from workspace root or student_resource/."""
     cwd = os.getcwd()
+    candidates = [
+        cwd,
+        os.path.join(cwd, "student_resource"),
+        os.path.dirname(os.path.abspath(cwd)),
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    ]
+    for cand in candidates:
+        if os.path.isdir(os.path.join(cand, "dataset", "train")) or \
+           os.path.isdir(os.path.join(cand, "dataset", "dataset", "train")):
+            return cand
     if os.path.isdir(os.path.join(cwd, "dataset", "train")):
         return cwd
     if os.path.isdir(os.path.join(cwd, "student_resource", "dataset", "train")):
@@ -40,6 +50,20 @@ def resolve_base_dir():
     if os.path.isdir(os.path.join(parent, "dataset", "train")):
         return parent
     return cwd
+
+
+def resolve_dataset_file(base_dir: str, rel_path: str) -> str:
+    """Resolve file path checking both standard dataset/ and nested dataset/dataset/ locations."""
+    candidates = [
+        os.path.join(base_dir, rel_path),
+        os.path.join(base_dir, "dataset", rel_path),
+        os.path.join(os.path.dirname(os.path.abspath(base_dir)), rel_path),
+        os.path.join(os.path.dirname(os.path.abspath(base_dir)), "dataset", rel_path),
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return os.path.abspath(c)
+    return os.path.join(base_dir, rel_path)
 
 
 def analyze_ground_truth(gt_path, chunk_size=250_000):
@@ -270,9 +294,9 @@ def display_sample_pairs(base_dir, stats):
     all_s2_ids = [m for c in selected_cases for m in c["match_ids"] if m.startswith("S2-")]
     all_s3_ids = [m for c in selected_cases for m in c["match_ids"] if m.startswith("S3-")]
 
-    s1_path = os.path.join(base_dir, "dataset/train/train_source1.tsv")
-    s2_path = os.path.join(base_dir, "dataset/train/train_source2.tsv")
-    s3_path = os.path.join(base_dir, "dataset/train/train_source3.tsv")
+    s1_path = resolve_dataset_file(base_dir, "dataset/train/train_source1.tsv")
+    s2_path = resolve_dataset_file(base_dir, "dataset/train/train_source2.tsv")
+    s3_path = resolve_dataset_file(base_dir, "dataset/train/train_source3.tsv")
 
     print(f"Fetching records from source files for {len(all_s1_ids)} S1, {len(all_s2_ids)} S2, {len(all_s3_ids)} S3 entities...")
     rec_s1 = stream_fetch_records(s1_path, all_s1_ids)
@@ -313,7 +337,7 @@ def display_sample_pairs(base_dir, stats):
 
 def main():
     base_dir = resolve_base_dir()
-    gt_file = os.path.join(base_dir, "dataset/train/train_ground_truth.tsv")
+    gt_file = resolve_dataset_file(base_dir, "dataset/train/train_ground_truth.tsv")
 
     if not os.path.exists(gt_file):
         print(f"[ERROR] Ground truth file not found at: {gt_file}")

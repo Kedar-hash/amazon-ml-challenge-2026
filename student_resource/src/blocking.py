@@ -214,11 +214,35 @@ class InvertedIndexBlocking:
 
 def resolve_base_dir():
     cwd = os.getcwd()
+    candidates = [
+        cwd,
+        os.path.join(cwd, "student_resource"),
+        os.path.dirname(os.path.abspath(cwd)),
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    ]
+    for cand in candidates:
+        if os.path.isdir(os.path.join(cand, "dataset", "train")) or \
+           os.path.isdir(os.path.join(cand, "dataset", "dataset", "train")):
+            return cand
     if os.path.isdir(os.path.join(cwd, "dataset", "train")):
         return cwd
     if os.path.isdir(os.path.join(cwd, "student_resource", "dataset", "train")):
         return os.path.join(cwd, "student_resource")
     return cwd
+
+
+def resolve_dataset_file(base_dir: str, rel_path: str) -> str:
+    """Resolve file path checking both standard dataset/ and nested dataset/dataset/ locations."""
+    candidates = [
+        os.path.join(base_dir, rel_path),
+        os.path.join(base_dir, "dataset", rel_path),
+        os.path.join(os.path.dirname(os.path.abspath(base_dir)), rel_path),
+        os.path.join(os.path.dirname(os.path.abspath(base_dir)), "dataset", rel_path),
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return os.path.abspath(c)
+    return os.path.join(base_dir, rel_path)
 
 
 def load_evaluation_data(base_dir, num_s1=1000, num_distractors=50000):
@@ -230,10 +254,10 @@ def load_evaluation_data(base_dir, num_s1=1000, num_distractors=50000):
     """
     print(f"Loading {num_s1:,} Source 1 records and associated ground-truth matches...")
 
-    s1_path = os.path.join(base_dir, "dataset/train/train_source1.tsv")
-    gt_path = os.path.join(base_dir, "dataset/train/train_ground_truth.tsv")
-    s2_path = os.path.join(base_dir, "dataset/train/train_source2.tsv")
-    s3_path = os.path.join(base_dir, "dataset/train/train_source3.tsv")
+    s1_path = resolve_dataset_file(base_dir, "dataset/train/train_source1.tsv")
+    gt_path = resolve_dataset_file(base_dir, "dataset/train/train_ground_truth.tsv")
+    s2_path = resolve_dataset_file(base_dir, "dataset/train/train_source2.tsv")
+    s3_path = resolve_dataset_file(base_dir, "dataset/train/train_source3.tsv")
 
     # 1. Load S1 Sample
     s1_records = {}

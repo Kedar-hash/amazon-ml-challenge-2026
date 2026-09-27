@@ -295,6 +295,16 @@ def batch_generate_features(pairs_list: list, s1_dict: dict, cand_dict: dict, as
 
 def resolve_base_dir():
     cwd = os.getcwd()
+    candidates = [
+        cwd,
+        os.path.join(cwd, "student_resource"),
+        os.path.dirname(os.path.abspath(cwd)),
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    ]
+    for cand in candidates:
+        if os.path.isdir(os.path.join(cand, "dataset", "train")) or \
+           os.path.isdir(os.path.join(cand, "dataset", "dataset", "train")):
+            return cand
     if os.path.isdir(os.path.join(cwd, "dataset", "train")):
         return cwd
     if os.path.isdir(os.path.join(cwd, "student_resource", "dataset", "train")):
@@ -302,14 +312,28 @@ def resolve_base_dir():
     return cwd
 
 
+def resolve_dataset_file(base_dir: str, rel_path: str) -> str:
+    """Resolve file path checking both standard dataset/ and nested dataset/dataset/ locations."""
+    candidates = [
+        os.path.join(base_dir, rel_path),
+        os.path.join(base_dir, "dataset", rel_path),
+        os.path.join(os.path.dirname(os.path.abspath(base_dir)), rel_path),
+        os.path.join(os.path.dirname(os.path.abspath(base_dir)), "dataset", rel_path),
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return os.path.abspath(c)
+    return os.path.join(base_dir, rel_path)
+
+
 def load_real_demo_cases(base_dir: str):
     """
     Dynamically loads real records from train_source1.tsv, train_source2.tsv,
     and train_source3.tsv. No hardcoded records or synthetic IDs.
     """
-    s1_path = os.path.join(base_dir, "dataset/train/train_source1.tsv")
-    s2_path = os.path.join(base_dir, "dataset/train/train_source2.tsv")
-    s3_path = os.path.join(base_dir, "dataset/train/train_source3.tsv")
+    s1_path = resolve_dataset_file(base_dir, "dataset/train/train_source1.tsv")
+    s2_path = resolve_dataset_file(base_dir, "dataset/train/train_source2.tsv")
+    s3_path = resolve_dataset_file(base_dir, "dataset/train/train_source3.tsv")
 
     # 5 distinct real Source 1 entities across US and India
     target_s1_ids = [

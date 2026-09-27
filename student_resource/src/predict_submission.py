@@ -66,16 +66,31 @@ from utils.validate_submission import validate
 
 
 def resolve_base_dir():
-    """Resolve student_resource base directory containing dataset and models."""
+    """Resolve the project root directory that contains the dataset and models."""
     script_parent = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    if os.path.isdir(os.path.join(script_parent, "dataset", "test")):
-        return script_parent
     cwd = os.getcwd()
-    if os.path.isdir(os.path.join(cwd, "dataset", "test")):
-        return cwd
-    if os.path.isdir(os.path.join(cwd, "student_resource", "dataset", "test")):
-        return os.path.join(cwd, "student_resource")
+    candidates = [script_parent, cwd, os.path.join(cwd, "student_resource")]
+    for cand in candidates:
+        # Support both flat (dataset/test) and nested (dataset/dataset/test) structures
+        if os.path.isdir(os.path.join(cand, "dataset", "test")):
+            return cand
+        if os.path.isdir(os.path.join(cand, "dataset", "dataset", "test")):
+            return cand
     return cwd
+
+
+def resolve_dataset_file(base_dir: str, rel_path: str) -> str:
+    """Resolve dataset file path, checking both flat and nested dataset/ layouts."""
+    candidates = [
+        os.path.join(base_dir, rel_path),
+        os.path.join(base_dir, "dataset", rel_path),
+        os.path.join(os.path.dirname(os.path.abspath(base_dir)), rel_path),
+        os.path.join(os.path.dirname(os.path.abspath(base_dir)), "dataset", rel_path),
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return os.path.abspath(c)
+    return os.path.join(base_dir, rel_path)
 
 
 # ---------------------------------------------------------------------------
@@ -366,8 +381,8 @@ def build_country_candidate_index(base_dir: str, target_country: str) -> tuple:
     Loads candidate records (Source 2 and Source 3) for a specific country
     and builds an inverted index using array('i') for compact RAM storage.
     """
-    s2_path = os.path.join(base_dir, "dataset/test/test_source2.tsv")
-    s3_path = os.path.join(base_dir, "dataset/test/test_source3.tsv")
+    s2_path = resolve_dataset_file(base_dir, "dataset/test/test_source2.tsv")
+    s3_path = resolve_dataset_file(base_dir, "dataset/test/test_source3.tsv")
 
     cand_pool = []
     index = defaultdict(lambda: array('i'))
@@ -411,7 +426,7 @@ def process_country_s1_batched(
     Evaluates candidate features, scores matches via HistGradientBoosting, and streams
     results directly to disk with live progress monitoring.
     """
-    s1_path = os.path.join(base_dir, "dataset/test/test_source1.tsv")
+    s1_path = resolve_dataset_file(base_dir, "dataset/test/test_source1.tsv")
     matcher = EntityMatcher.load(model_path)
     threshold = matcher.optimal_threshold
 
@@ -527,7 +542,7 @@ def assemble_final_submissions(
     Assembles final submission files matching the exact line-by-line order of test_source1.tsv.
     Ensures 100% data integrity, exact headers, and strict subset compliance.
     """
-    s1_path = os.path.join(base_dir, "dataset/test/test_source1.tsv")
+    s1_path = resolve_dataset_file(base_dir, "dataset/test/test_source1.tsv")
     print("\n" + "=" * 80, flush=True)
     print("ASSEMBLING FINAL SUBMISSION FILES IN EXACT TEST_SOURCE1 ROW ORDER", flush=True)
     print("=" * 80, flush=True)
@@ -604,7 +619,7 @@ def run_test_inference_pipeline():
     # Acquire concurrency lock
     acquire_process_lock(output_dir)
 
-    s1_path = os.path.join(base_dir, "dataset/test/test_source1.tsv")
+    s1_path = resolve_dataset_file(base_dir, "dataset/test/test_source1.tsv")
     model_path = os.path.join(base_dir, "models/matcher_model.joblib")
     final_matching_path = os.path.join(output_dir, "matching_results.tsv")
     final_candidate_path = os.path.join(output_dir, "candidate_pairs.tsv")
@@ -665,7 +680,7 @@ def run_test_inference_pipeline():
             model_path=model_path,
             temp_matching_path=temp_match,
             temp_candidate_path=temp_cand,
-            max_block_size=50,
+            max_block_size=100,  # Balanced: 94.9% posting coverage, ~2x faster than cap=200 on large indices
             batch_size=1000,
         )
 
@@ -689,7 +704,7 @@ def run_test_inference_pipeline():
     print("\n" + "=" * 80, flush=True)
     print("RUNNING OFFICIAL SUBMISSION VALIDATOR (utils/validate_submission.py)", flush=True)
     print("=" * 80, flush=True)
-    test_dir = os.path.join(base_dir, "dataset/test")
+    test_dir = os.path.dirname(resolve_dataset_file(base_dir, "dataset/test/test_source1.tsv"))
     errors, warnings = validate(
         matching_path=final_matching_path,
         candidate_path=final_candidate_path,

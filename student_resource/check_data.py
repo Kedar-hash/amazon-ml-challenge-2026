@@ -62,6 +62,16 @@ def count_file_lines(file_path):
 def resolve_base_dir():
     """Resolve directory so script runs from inside student_resource or workspace root."""
     cwd = os.getcwd()
+    candidates = [
+        cwd,
+        os.path.join(cwd, "student_resource"),
+        os.path.dirname(os.path.abspath(cwd)),
+        os.path.dirname(os.path.abspath(__file__)),
+    ]
+    for cand in candidates:
+        if os.path.isdir(os.path.join(cand, "dataset", "train")) or \
+           os.path.isdir(os.path.join(cand, "dataset", "dataset", "train")):
+            return cand
     if os.path.isdir(os.path.join(cwd, "dataset")):
         return cwd
     if os.path.isdir(os.path.join(cwd, "student_resource", "dataset")):
@@ -72,14 +82,34 @@ def resolve_base_dir():
     return cwd
 
 
+def resolve_dataset_file(base_dir, rel_path):
+    """Resolve file path across standard dataset/ and nested dataset/dataset/ structures."""
+    candidates = [
+        os.path.join(base_dir, rel_path),
+        os.path.join(base_dir, "dataset", rel_path),
+        os.path.join(os.path.dirname(os.path.abspath(base_dir)), rel_path),
+        os.path.join(os.path.dirname(os.path.abspath(base_dir)), "dataset", rel_path),
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return os.path.abspath(c)
+    return os.path.join(base_dir, rel_path)
+
+
 def check_directories(base_dir):
     print("=" * 70)
     print("1. DIRECTORY STRUCTURE CHECK")
     print("=" * 70)
     all_ok = True
     for rel_dir in EXPECTED_DIRS:
-        full_dir = os.path.join(base_dir, rel_dir)
-        exists = os.path.isdir(full_dir)
+        candidates = [
+            os.path.join(base_dir, rel_dir),
+            os.path.join(base_dir, "dataset", rel_dir),
+            os.path.join(base_dir, "student_resource", rel_dir),
+            os.path.join(os.path.dirname(os.path.abspath(base_dir)), rel_dir),
+            os.path.join(os.path.dirname(os.path.abspath(base_dir)), "student_resource", rel_dir),
+        ]
+        exists = any(os.path.isdir(c) for c in candidates)
         status = "OK" if exists else "MISSING"
         if not exists:
             all_ok = False
@@ -96,7 +126,7 @@ def inspect_files(base_dir, preview_n=3, count_rows=False):
     summary = []
 
     for name, (rel_path, expected_cols, expected_prefix) in EXPECTED_FILES.items():
-        full_path = os.path.join(base_dir, rel_path)
+        full_path = resolve_dataset_file(base_dir, rel_path)
         print(f"\n--- Checking: {name} ({rel_path}) ---")
 
         if not os.path.exists(full_path):

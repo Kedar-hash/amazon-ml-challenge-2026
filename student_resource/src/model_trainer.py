@@ -36,11 +36,11 @@ import joblib
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.inspection import permutation_importance
 
-# Ensure UTF-8 output on Windows terminal
+# Ensure UTF-8 output and line buffering on Windows terminal
 if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stdout.reconfigure(encoding="utf-8", line_buffering=True, errors="replace")
 if hasattr(sys.stderr, "reconfigure"):
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", line_buffering=True, errors="replace")
 
 # Ensure student_resource root is in sys.path
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -60,11 +60,35 @@ from src.feature_generator import compute_pair_features, FEATURE_COLUMNS
 
 def resolve_base_dir():
     cwd = os.getcwd()
+    candidates = [
+        cwd,
+        os.path.join(cwd, "student_resource"),
+        os.path.dirname(os.path.abspath(cwd)),
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    ]
+    for cand in candidates:
+        if os.path.isdir(os.path.join(cand, "dataset", "train")) or \
+           os.path.isdir(os.path.join(cand, "dataset", "dataset", "train")):
+            return cand
     if os.path.isdir(os.path.join(cwd, "dataset", "train")):
         return cwd
     if os.path.isdir(os.path.join(cwd, "student_resource", "dataset", "train")):
         return os.path.join(cwd, "student_resource")
     return cwd
+
+
+def resolve_dataset_file(base_dir: str, rel_path: str) -> str:
+    """Resolve file path checking both standard dataset/ and nested dataset/dataset/ locations."""
+    candidates = [
+        os.path.join(base_dir, rel_path),
+        os.path.join(base_dir, "dataset", rel_path),
+        os.path.join(os.path.dirname(os.path.abspath(base_dir)), rel_path),
+        os.path.join(os.path.dirname(os.path.abspath(base_dir)), "dataset", rel_path),
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return os.path.abspath(c)
+    return os.path.join(base_dir, rel_path)
 
 
 def calculate_entity_f05(true_matches: set, pred_matches: set) -> tuple:
@@ -136,15 +160,15 @@ class EntityMatcher:
         return matcher
 
 
-def load_training_dataset(base_dir: str, num_s1: int = 1000, num_distractors: int = 15000):
+def load_training_dataset(base_dir: str, num_s1: int = 10000, num_distractors: int = 40000):
     """
     Dynamically loads Source 1 records, ground truth links, and candidate pool.
     No hardcoded business data or IDs.
     """
-    s1_path = os.path.join(base_dir, "dataset/train/train_source1.tsv")
-    gt_path = os.path.join(base_dir, "dataset/train/train_ground_truth.tsv")
-    s2_path = os.path.join(base_dir, "dataset/train/train_source2.tsv")
-    s3_path = os.path.join(base_dir, "dataset/train/train_source3.tsv")
+    s1_path = resolve_dataset_file(base_dir, "dataset/train/train_source1.tsv")
+    gt_path = resolve_dataset_file(base_dir, "dataset/train/train_ground_truth.tsv")
+    s2_path = resolve_dataset_file(base_dir, "dataset/train/train_source2.tsv")
+    s3_path = resolve_dataset_file(base_dir, "dataset/train/train_source3.tsv")
 
     print(f"Loading {num_s1:,} Source 1 records from {s1_path}...")
     s1_records = {}
@@ -179,6 +203,8 @@ def load_training_dataset(base_dir: str, num_s1: int = 1000, num_distractors: in
                 ms = [x.strip() for x in parts[1].split(",") if x.strip()] if len(parts) > 1 and parts[1].strip() else []
                 gt_matches[parts[0]] = set(ms)
                 all_matched_ids.update(ms)
+                if len(gt_matches) == len(s1_records):
+                    break
 
     print(f"Loading candidate pool (target matches + {num_distractors:,} distractors)...")
     s2_s3_pool = {}
@@ -186,6 +212,7 @@ def load_training_dataset(base_dir: str, num_s1: int = 1000, num_distractors: in
 
     for path in [s2_path, s3_path]:
         dist_count = 0
+        rem_targets = {eid for eid in all_matched_ids if (eid.startswith("S2-") if "source2" in path else eid.startswith("S3-"))}
         with open(path, "r", encoding="utf-8", errors="replace") as f:
             f.readline()
             for line in f:
@@ -204,8 +231,12 @@ def load_training_dataset(base_dir: str, num_s1: int = 1000, num_distractors: in
                             "clean_addr": normalize_address(parts[2]),
                             "addr_tokens": get_address_tokens(parts[2]),
                         }
-                        if not is_target:
+                        if is_target:
+                            rem_targets.discard(eid)
+                        else:
                             dist_count += 1
+                        if not rem_targets and dist_count >= distractors_per_file:
+                            break
 
     return s1_records, gt_matches, s2_s3_pool
 
@@ -220,7 +251,7 @@ def train_and_evaluate():
 
     # 1. Load data
     s1_records, gt_matches, s2_s3_pool = load_training_dataset(
-        base_dir, num_s1=1000, num_distractors=15000
+        base_dir, num_s1=10000, num_distractors=40000
     )
 
     # 2. Build blocking index
@@ -370,6 +401,10 @@ def train_and_evaluate():
     # 10. Save Model
     model_save_path = os.path.join(base_dir, "models/matcher_model.joblib")
     matcher.save(model_save_path)
+    # Also save copy in student_resource/models/ if base_dir is root
+    if "student_resource" not in base_dir:
+        student_model_path = os.path.join(base_dir, "student_resource", "models", "matcher_model.joblib")
+        matcher.save(student_model_path)
 
     total_time = time.time() - t_start
     print(f"\nStep 6 end-to-end pipeline completed in {total_time:.2f} seconds.")
